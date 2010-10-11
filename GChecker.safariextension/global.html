@@ -1,0 +1,123 @@
+<!DOCTYPE HTML>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>GChecker</title>
+  <script type="text/javascript" src="lib/jquery-1.4.2.min.js"></script>
+  <script type="text/javascript">
+    safari.application.addEventListener("command", commandHandler, false);
+//    safari.application.addEventListener("validate", function(event) { updateUnreadCount(); }, false);
+    safari.extension.settings.addEventListener("change", settingsChanged, false);
+    function readerUrl() {
+      return getProtocol() + "://www.google.com/reader/view/"
+    }
+
+    function readerApiUrl() {
+      return getProtocol() + "://www.google.com/reader/api/0/unread-count"
+    }
+    
+    function getProtocol() {
+      return (safari.extension.settings.getItem("use_ssl") ? "https" : "http");
+    }
+    
+    function commandHandler(event) {
+      // Don't open a new tab if we've already got Gmail open somewhere
+      for (i in safari.application.browserWindows) {
+        for (j in safari.application.browserWindows[i].tabs) {
+          // We can't access the SafariBrowserTab.url if we can't access that URL!
+          if (safari.application.browserWindows[i].tabs[j].url && safari.application.browserWindows[i].tabs[j].url.indexOf(readerUrl()) == 0) {
+            // Because when we activate this window below, the array's index will change
+            // Use Array.forEach instead? Meh, makes escaping early more awkward.
+            var browserWindow = safari.application.browserWindows[i];
+            
+            browserWindow.activate();
+            browserWindow.tabs[j].url = readerUrl();
+            browserWindow.tabs[j].activate();
+            return;
+          }
+        }
+      }
+      
+      var newTab = safari.application.activeBrowserWindow.openTab();
+      newTab.url = readerUrl();
+    }
+
+    function updateUnreadCount() {
+      doIfLoggedIn(
+        function() {
+          $.ajax({
+            data: {
+              "all": true,
+              "autorefresh": true,
+              "output":"json"
+            },
+            url: readerApiUrl(),
+            success: function(d) {
+              var unreads = $.parseJSON(d).unreadcounts;
+              var unreadCount;
+              $.each(unreads, function(i,item){
+                if (item.id.lastIndexOf("reading-list") > 0) {
+                    unreadCount = item.count;
+                    return false; // break
+                }
+              });
+              updateToolbar(unreadCount, []);
+              // updateToolbar($("fullcount", d).text(), $("entry title", d).map(function() { return $(this).text(); }).get());
+            }
+        });
+      },
+        function() {
+          updateToolbar(0, []);
+        }
+      );
+    }
+    
+    function doIfLoggedIn(func, func_else) {
+      $.ajax({
+        url: readerUrl(),
+        success: function(d) {
+          // A crude login check: The Google login page uses Quirks mode; the "Loading inbox" screen is HTML5
+          // This is to avoid calling the Feed unless we're authorized (since this will display a HTTP Auth sheet)
+          
+          // It's not perfect – because (Safari is especially crappy here) there's sometimes lag
+          // between Gmail login and Feed auth
+          
+          // Oh and obviously this is a really shitty way to see if we're logged in or not.
+          if (!d.indexOf("<!DOCTYPE HTML")) {
+            func();
+          }
+          else {
+            func_else();
+          }
+        }
+      });
+    }
+    
+    function updateToolbar(fullcount, unread_mails) {
+      $.each(safari.extension.toolbarItems, function(i, v) {
+        v.badge = fullcount;
+        v.toolTip = unread_mails.length ? ("• " + unread_mails.join("\n• ")) : "GReader";
+      });
+    }
+    
+    function settingsChanged(event) {
+      switch (event.key) {
+        case "update":
+          safari.extension.globalPage.contentWindow.clearInterval(updater);
+          updateUnreadCount();
+          updater = safari.extension.globalPage.contentWindow.setInterval(updateUnreadCount, event.newValue * 1000);
+        break;
+        case "use_ssl":
+          updateUnreadCount();
+        break;
+      }
+    }
+
+    // first check
+    updateUnreadCount();
+    // interval check
+    var updater = safari.extension.globalPage.contentWindow.setInterval(updateUnreadCount, safari.extension.settings.getItem("update") * 1000);
+  </script>
+</head>
+<body></body>
+</html>

@@ -1,0 +1,20 @@
+GChecker 0.1 by Rochefort
+=========================
+
+This extension will periodically check your Google Reader for unread articles.
+Just enable extensions in Safari 5, install the extension and configure it under your preferences.
+
+
+The extension will automatically check the Google Reader that you're currently logged into.
+
+
+Changelog
+---------
+
+### 0.1
+* Release
+
+
+Support
+-------
+If you have questions or feature requests, please submit them to http://www.rochefort8.com/contact/.
